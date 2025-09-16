@@ -58,7 +58,20 @@ task("task:ivs-decrypt-v2", "Request IVS score decryption using contract callbac
           console.log(`⚠️  Timeout after 150 seconds. Check events manually with: npx hardhat task:ivs-check-events --network sepolia`);
         }, 150000);
 
-        contract.once(filter, (eventRequestId: any, eventUserId: any, rawValue: any, dataType: any, scaledValue: any) => {
+        contract.once(filter, (...args: any[]) => {
+          // Handle both old (3 params) and new (5 params) event formats
+          let eventRequestId: any, eventUserId: any, rawValue: any;
+          
+          if (args.length >= 5) {
+            // New format: requestId, userId, rawValue, dataType, scaledValue
+            [eventRequestId, eventUserId, rawValue] = args;
+          } else if (args.length >= 3) {
+            // Old format: requestId, userId, rawValue
+            [eventRequestId, eventUserId, rawValue] = args;
+          } else {
+            return; // Invalid event format
+          }
+          
           if (eventRequestId.toString() === requestId.toString()) {
             clearTimeout(timeout);
             const decimalValue = (Number(rawValue) / 10000).toFixed(3);
@@ -144,7 +157,21 @@ task("task:ivs-decrypt-health", "Request health status decryption using contract
           console.log(`⚠️  Timeout after 150 seconds. Check events manually with: npx hardhat task:ivs-check-events --network sepolia`);
         }, 150000);
         
-        contract.once(filter, (eventRequestId: any, eventUserId: any, rawValue: any, dataType: any, scaledValue: any) => {
+        contract.once(filter, (...args: any[]) => {
+          // Handle both old (3 params) and new (5 params) event formats
+          let eventRequestId: any, eventUserId: any, rawValue: any, dataType: any;
+          
+          if (args.length >= 5) {
+            // New format: requestId, userId, rawValue, dataType, scaledValue
+            [eventRequestId, eventUserId, rawValue, dataType] = args;
+          } else if (args.length >= 3) {
+            // Old format: requestId, userId, rawValue (assume health data)
+            [eventRequestId, eventUserId, rawValue] = args;
+            dataType = "health"; // Assume health status for old format
+          } else {
+            return; // Invalid event format
+          }
+          
           if (eventRequestId.toString() === requestId.toString()) {
             clearTimeout(timeout);
             
@@ -455,14 +482,26 @@ task("task:ivs-decrypt-complete", "Request IVS decryption and wait for decimal r
           reject(new Error('Decryption timeout after 150 seconds'));
         }, 150000);
 
-        const eventHandler = (requestId: any, userIdEvent: any, rawValue: any, dataType: any, scaledValue: any) => {
-          if (userIdEvent.toString() === userId.toString() && dataType === 'ivs') {
+        const eventHandler = (...args: any[]) => {
+          // Handle both old (3 params) and new (5 params) event formats
+          let requestId: any, userIdEvent: any, rawValue: any;
+          
+          if (args.length >= 5) {
+            // New format: requestId, userId, rawValue, dataType, scaledValue
+            [requestId, userIdEvent, rawValue] = args;
+          } else if (args.length >= 3) {
+            // Old format: requestId, userId, rawValue
+            [requestId, userIdEvent, rawValue] = args;
+          } else {
+            return; // Invalid event format
+          }
+          
+          if (userIdEvent.toString() === userId.toString()) {
             clearTimeout(timeout);
             const decryptionResult = {
               requestId: requestId.toString(),
               userId: userIdEvent.toString(),
               rawValue: rawValue.toString(),
-              scaledValue: scaledValue.toString(),
               decimalValue: (Number(rawValue) / 10000).toFixed(3)
             };
             contract.off(filter, eventHandler);
@@ -487,8 +526,7 @@ task("task:ivs-decrypt-complete", "Request IVS decryption and wait for decimal r
       console.log(`═══════════════════════════════════════`);
       console.log(`👤 User ID: ${result.userId}`);
       console.log(`🔢 Raw IVS Value: ${result.rawValue}`);
-      console.log(`📊 Scaled Value: ${result.scaledValue}`);
-      console.log(`💯 Decimal IVS Score: ${result.decimalValue}`);
+      console.log(` Decimal IVS Score: ${result.decimalValue}`);
       console.log(`🆔 Request ID: ${result.requestId}`);
       console.log(`═══════════════════════════════════════`);
       
@@ -539,5 +577,128 @@ task("task:ivs-convert", "Convert raw IVS value to decimal")
       console.log(`📉 Risk Level: LOW (Second-level contact)`);
     } else {
       console.log(`✅ Risk Level: MINIMAL (Low or no exposure)`);
+    }
+  });
+
+/**
+ * MOST RELIABLE: Request IVS decryption and poll for result with automatic conversion
+ * Uses polling instead of real-time events to avoid timing issues
+ */
+task("task:ivs-decrypt-wait", "Request IVS decryption and wait for result (reliable polling method)")
+  .addParam("userid", "The user ID to decrypt IVS score for")
+  .setAction(async function (taskArguments: TaskArguments, hre) {
+    const { ethers } = hre;
+    
+    const userId = parseInt(taskArguments.userid);
+    if (!Number.isInteger(userId)) {
+      throw new Error(`Argument --userid is not an integer`);
+    }
+
+    const contract = await ethers.getContractAt("InfectionVulnerabilityScore", IVS_CONTRACT_ADDRESS);
+
+    console.log(`🔐 Requesting IVS decryption for user ${userId}...`);
+    console.log(`Contract: ${IVS_CONTRACT_ADDRESS}`);
+
+    try {
+      // Step 1: Submit the decryption request
+      const tx = await contract.getDecryptedIVS(userId);
+      const receipt = await tx.wait();
+      
+      console.log(`✅ Transaction confirmed: ${tx.hash}`);
+      console.log(`📡 Submitted decryption request to Zama relayer...`);
+      
+      // Step 2: Get the request ID from the transaction receipt
+      const requestEvent = receipt?.logs.find(log => {
+        try {
+          const parsed = contract.interface.parseLog(log);
+          return parsed?.name === 'DecryptionRequested';
+        } catch {
+          return false;
+        }
+      });
+      
+      let requestId = null;
+      if (requestEvent) {
+        const parsed = contract.interface.parseLog(requestEvent);
+        requestId = parsed?.args[0];
+        console.log(`🆔 Request ID: ${requestId}`);
+      }
+      
+      // Step 3: Poll for completion (much more reliable than real-time events)
+      console.log(`⏳ Polling for decryption completion (up to 150 seconds)...`);
+      
+      const startTime = Date.now();
+      const maxWaitTime = 150000; // 150 seconds
+      const pollInterval = 5000; // Check every 5 seconds
+      
+      while (Date.now() - startTime < maxWaitTime) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        
+        // Query recent DecryptionCompleted events
+        const currentBlock = await ethers.provider.getBlockNumber();
+        const fromBlock = Math.max(receipt!.blockNumber, currentBlock - 20); // Look back 20 blocks
+        
+        try {
+          const completedFilter = contract.filters.DecryptionCompleted();
+          const completedEvents = await contract.queryFilter(completedFilter, fromBlock, currentBlock);
+          
+          // Look for our specific completion event
+          for (const event of completedEvents) {
+            const args = event.args;
+            const eventRequestId = args[0];
+            const eventUserId = args[1];
+            const rawValue = args[2];
+            
+            // Check if this is our event (by requestId if available, otherwise by userId + block)
+            const isOurEvent = requestId ? 
+              eventRequestId.toString() === requestId.toString() :
+              (eventUserId.toString() === userId.toString() && event.blockNumber >= receipt!.blockNumber);
+            
+            if (isOurEvent) {
+              // Found our decryption result!
+              const decimalValue = (Number(rawValue) / 10000).toFixed(3);
+              
+              console.log(`\n🎉 IVS Decryption Complete!`);
+              console.log(`═══════════════════════════════════════`);
+              console.log(`👤 User ID: ${eventUserId.toString()}`);
+              console.log(`🔢 Raw IVS Value: ${rawValue.toString()}`);
+              console.log(`💯 Decimal IVS Score: ${decimalValue}`);
+              console.log(`🆔 Request ID: ${eventRequestId.toString()}`);
+              console.log(`⏰ Completed in block: ${event.blockNumber}`);
+              console.log(`═══════════════════════════════════════`);
+              
+              // Risk level interpretation
+              const decimalNum = parseFloat(decimalValue);
+              if (decimalNum >= 0.5) {
+                console.log(`📈 Risk Level: HIGH (Direct infection or high exposure)`);
+              } else if (decimalNum >= 0.25) {
+                console.log(`📊 Risk Level: MEDIUM (Direct contact with infected)`);
+              } else if (decimalNum >= 0.125) {
+                console.log(`📉 Risk Level: LOW (Second-level contact)`);
+              } else {
+                console.log(`✅ Risk Level: MINIMAL (Low or no exposure)`);
+              }
+              
+              return; // Success! Exit the task
+            }
+          }
+        } catch (queryError) {
+          console.log(`⚠️  Error querying events, continuing to poll...`);
+        }
+        
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        console.log(`⏳ Still waiting... (${elapsed}s elapsed)`);
+      }
+      
+      // If we get here, we timed out
+      console.log(`\n❌ Decryption timeout after 150 seconds`);
+      console.log(`🔍 Please check events manually with:`);
+      console.log(`npx hardhat task:ivs-check-events --network sepolia`);
+      console.log(`\n💡 Or use the conversion utility with the raw value:`);
+      console.log(`npx hardhat task:ivs-convert --rawvalue <raw_value>`);
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`❌ Decryption failed: ${errorMessage}`);
     }
   });
