@@ -20,7 +20,7 @@ import type { TaskArguments } from "hardhat/types";
  */
 
 // Contract address (update after deployment)
-const IVS_CONTRACT_ADDRESS = "0x125c8834a1728f4170e1DD7073806e376EeC1030";
+const IVS_CONTRACT_ADDRESS = "0xf92D670b1d0f929524Cf51d510781d88F1920733";
 
 /**
  * Register a new user in the IVS system

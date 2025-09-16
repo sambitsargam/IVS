@@ -3,7 +3,7 @@ import type { TaskArguments } from "hardhat/types";
 import { FhevmType } from "@fhevm/hardhat-plugin";
 
 // Contract address (update after deployment)
-const IVS_CONTRACT_ADDRESS = "0x125c8834a1728f4170e1DD7073806e376EeC1030";
+const IVS_CONTRACT_ADDRESS = "0xf92D670b1d0f929524Cf51d510781d88F1920733";
 
 /**
  * Request decryption of IVS score using     } catch (error: unknown) {
@@ -44,11 +44,48 @@ task("task:ivs-decrypt-v2", "Request IVS score decryption using contract callbac
       
       if (requestEvent) {
         const parsed = contract.interface.parseLog(requestEvent);
-        console.log(`Request ID: ${parsed?.args[0]}`);
+        const requestId = parsed?.args[0];
+        console.log(`Request ID: ${requestId}`);
         console.log(`User ID: ${parsed?.args[1]}`);
-        console.log(`\nDecryption request submitted successfully!`);
-        console.log(`Monitor the contract events for DecryptionCompleted to see the result.`);
-        console.log(`(This will be handled by the relayer and may take a few moments)`);
+        console.log(`\n✅ Decryption request submitted successfully!`);
+        console.log(`⏳ Waiting for Zama relayer to process (up to 150 seconds)...`);
+        
+        // Wait for decryption result and auto-convert
+        console.log(`📡 Monitoring events for DecryptionCompleted...`);
+        
+        const filter = contract.filters.DecryptionCompleted();
+        const timeout = setTimeout(() => {
+          console.log(`⚠️  Timeout after 150 seconds. Check events manually with: npx hardhat task:ivs-check-events --network sepolia`);
+        }, 150000);
+
+        contract.once(filter, (eventRequestId: any, eventUserId: any, rawValue: any, dataType: any, scaledValue: any) => {
+          if (eventRequestId.toString() === requestId.toString()) {
+            clearTimeout(timeout);
+            const decimalValue = (Number(rawValue) / 10000).toFixed(3);
+            
+            console.log(`\n🎉 IVS Decryption Complete!`);
+            console.log(`═══════════════════════════════════════`);
+            console.log(`👤 User ID: ${eventUserId.toString()}`);
+            console.log(`🔢 Raw IVS Value: ${rawValue.toString()}`);
+            console.log(`💯 Decimal IVS Score: ${decimalValue}`);
+            console.log(`🆔 Request ID: ${eventRequestId.toString()}`);
+            console.log(`═══════════════════════════════════════`);
+            
+            // Interpretation
+            const decimalNum = parseFloat(decimalValue);
+            if (decimalNum >= 0.5) {
+              console.log(`📈 Risk Level: HIGH (Direct infection or high exposure)`);
+            } else if (decimalNum >= 0.25) {
+              console.log(`📊 Risk Level: MEDIUM (Direct contact with infected)`);
+            } else if (decimalNum >= 0.125) {
+              console.log(`📉 Risk Level: LOW (Second-level contact)`);
+            } else {
+              console.log(`✅ Risk Level: MINIMAL (Low or no exposure)`);
+            }
+            
+            process.exit(0);
+          }
+        });
       }
 
     } catch (error: unknown) {
@@ -93,11 +130,43 @@ task("task:ivs-decrypt-health", "Request health status decryption using contract
       
       if (requestEvent) {
         const parsed = contract.interface.parseLog(requestEvent);
-        console.log(`Request ID: ${parsed?.args[0]}`);
+        const requestId = parsed?.args[0];
+        console.log(`Request ID: ${requestId}`);
         console.log(`User ID: ${parsed?.args[1]}`);
-        console.log(`\nHealth status decryption request submitted successfully!`);
-        console.log(`Monitor the contract events for DecryptionCompleted to see the result.`);
-        console.log(`(This will be handled by the relayer and may take a few moments)`);
+        console.log(`\n✅ Health status decryption request submitted successfully!`);
+        console.log(`⏳ Waiting for Zama relayer to process (up to 150 seconds)...`);
+        
+        // Wait for decryption result and auto-convert
+        console.log(`📡 Monitoring events for DecryptionCompleted...`);
+        
+        const filter = contract.filters.DecryptionCompleted();
+        const timeout = setTimeout(() => {
+          console.log(`⚠️  Timeout after 150 seconds. Check events manually with: npx hardhat task:ivs-check-events --network sepolia`);
+        }, 150000);
+        
+        contract.once(filter, (eventRequestId: any, eventUserId: any, rawValue: any, dataType: any, scaledValue: any) => {
+          if (eventRequestId.toString() === requestId.toString()) {
+            clearTimeout(timeout);
+            
+            console.log(`\n🎉 Health Status Decryption Complete!`);
+            console.log(`════════════════════════════════════════`);
+            console.log(`👤 User ID: ${eventUserId.toString()}`);
+            
+            if (dataType === "health") {
+              const healthStatus = rawValue.toString() === "1" ? "INFECTED" : "NOT INFECTED";
+              console.log(`🏥 Health Status: ${healthStatus}`);
+            } else {
+              const decimalValue = (Number(rawValue) / 10000).toFixed(3);
+              console.log(`🔢 Raw Value: ${rawValue.toString()}`);
+              console.log(`💯 Decimal Value: ${decimalValue}`);
+            }
+            
+            console.log(`🆔 Request ID: ${eventRequestId.toString()}`);
+            console.log(`════════════════════════════════════════`);
+            
+            process.exit(0);
+          }
+        });
       } else {
         console.log(`No DecryptionRequested event found in transaction receipt`);
       }
@@ -130,20 +199,33 @@ task("task:ivs-listen-decrypt", "Listen for IVS decryption completion events")
       if (args.length >= 5) {
         // New format: requestId, userId, decryptedValue, dataType, scaledValue
         const [requestId, userId, decryptedValue, dataType, scaledValue] = args;
-        console.log(`\n✅ Decryption Completed!`);
-        console.log(`Request ID: ${requestId.toString()}`);
-        console.log(`User ID: ${userId.toString()}`);
-        console.log(`Data Type: ${dataType}`);
-        console.log(`Raw Decrypted Value: ${decryptedValue.toString()}`);
-        console.log(`Scaled Value: ${scaledValue.toString()}`);
+        console.log(`\n🎉 Decryption Completed!`);
+        console.log(`═══════════════════════════════════════`);
+        console.log(`🆔 Request ID: ${requestId.toString()}`);
+        console.log(`👤 User ID: ${userId.toString()}`);
+        console.log(`📋 Data Type: ${dataType}`);
+        console.log(`🔢 Raw Decrypted Value: ${decryptedValue.toString()}`);
         
         if (dataType === "ivs") {
           // For IVS, show the meaningful interpretation
-          const decimalValue = Number(scaledValue) / 1000; // Convert back to decimal (0.500, 0.250, etc.)
-          console.log(`IVS Score (decimal): ${decimalValue.toFixed(3)}`);
+          const decimalValue = (Number(decryptedValue) / 10000).toFixed(3);
+          console.log(`💯 IVS Score (decimal): ${decimalValue}`);
+          
+          // Risk level interpretation
+          const decimalNum = parseFloat(decimalValue);
+          if (decimalNum >= 0.5) {
+            console.log(`📈 Risk Level: HIGH (Direct infection or high exposure)`);
+          } else if (decimalNum >= 0.25) {
+            console.log(`📊 Risk Level: MEDIUM (Direct contact with infected)`);
+          } else if (decimalNum >= 0.125) {
+            console.log(`📉 Risk Level: LOW (Second-level contact)`);
+          } else {
+            console.log(`✅ Risk Level: MINIMAL (Low or no exposure)`);
+          }
         } else if (dataType === "health") {
           // For health status, 0 = healthy, 1 = infected
-          console.log(`Health Status: ${decryptedValue.toString() === "1" ? "Infected" : "Healthy"}`);
+          const healthStatus = decryptedValue.toString() === "1" ? "INFECTED" : "NOT INFECTED";
+          console.log(`🏥 Health Status: ${healthStatus}`);
         }
       } else {
         // Old format: requestId, userId, decryptedValue
@@ -154,7 +236,7 @@ task("task:ivs-listen-decrypt", "Listen for IVS decryption completion events")
         console.log(`Decrypted Value: ${decryptedValue.toString()}`);
       }
       
-      console.log(`==========================================`);
+        console.log(`═══════════════════════════════════════`);
     });
 
     // Keep the process alive
@@ -343,5 +425,119 @@ task("task:ivs-decrypt-all", "Decrypt IVS scores for all users")
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`Failed to decrypt all scores: ${errorMessage}`);
+    }
+  });
+
+/**
+ * Request IVS decryption and wait for result with decimal conversion (admin only)
+ */
+task("task:ivs-decrypt-complete", "Request IVS decryption and wait for decimal result")
+  .addParam("userid", "The user ID to decrypt IVS score for")
+  .setAction(async function (taskArguments: TaskArguments, hre) {
+    const { ethers } = hre;
+    
+    const userId = parseInt(taskArguments.userid);
+    if (!Number.isInteger(userId)) {
+      throw new Error(`Argument --userid is not an integer`);
+    }
+
+    const contract = await ethers.getContractAt("InfectionVulnerabilityScore", IVS_CONTRACT_ADDRESS);
+
+    console.log(`🔐 Requesting IVS decryption for user ${userId}...`);
+    console.log(`Contract: ${IVS_CONTRACT_ADDRESS}`);
+
+    try {
+      // Set up event filter
+      const filter = contract.filters.DecryptionCompleted();
+      
+      const decryptionPromise = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Decryption timeout after 150 seconds'));
+        }, 150000);
+
+        const eventHandler = (requestId: any, userIdEvent: any, rawValue: any, dataType: any, scaledValue: any) => {
+          if (userIdEvent.toString() === userId.toString() && dataType === 'ivs') {
+            clearTimeout(timeout);
+            const decryptionResult = {
+              requestId: requestId.toString(),
+              userId: userIdEvent.toString(),
+              rawValue: rawValue.toString(),
+              scaledValue: scaledValue.toString(),
+              decimalValue: (Number(rawValue) / 10000).toFixed(3)
+            };
+            contract.off(filter, eventHandler);
+            resolve(decryptionResult);
+          }
+        };
+
+        contract.on(filter, eventHandler);
+      });
+
+      // Request decryption (admin only)
+      const tx = await contract.getDecryptedIVS(userId);
+      const receipt = await tx.wait();
+      
+      console.log(`✅ Transaction confirmed: ${tx.hash}`);
+      console.log(`⏳ Waiting for decryption by Zama relayer...`);
+      
+      // Wait for decryption to complete
+      const result = await decryptionPromise as any;
+      
+      console.log(`\n🎉 IVS Decryption Complete!`);
+      console.log(`═══════════════════════════════════════`);
+      console.log(`👤 User ID: ${result.userId}`);
+      console.log(`🔢 Raw IVS Value: ${result.rawValue}`);
+      console.log(`📊 Scaled Value: ${result.scaledValue}`);
+      console.log(`💯 Decimal IVS Score: ${result.decimalValue}`);
+      console.log(`🆔 Request ID: ${result.requestId}`);
+      console.log(`═══════════════════════════════════════`);
+      
+      // Interpretation
+      const decimalNum = parseFloat(result.decimalValue);
+      if (decimalNum >= 0.5) {
+        console.log(`📈 Risk Level: HIGH (Direct infection or high exposure)`);
+      } else if (decimalNum >= 0.25) {
+        console.log(`📊 Risk Level: MEDIUM (Direct contact with infected)`);
+      } else if (decimalNum >= 0.125) {
+        console.log(`📉 Risk Level: LOW (Second-level contact)`);
+      } else {
+        console.log(`✅ Risk Level: MINIMAL (Low or no exposure)`);
+      }
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`❌ Decryption failed: ${errorMessage}`);
+    }
+  });
+
+/**
+ * Helper task to convert raw IVS values to decimal
+ */
+task("task:ivs-convert", "Convert raw IVS value to decimal")
+  .addParam("rawvalue", "The raw IVS value to convert")
+  .setAction(async function (taskArguments: TaskArguments) {
+    const rawValue = parseInt(taskArguments.rawvalue);
+    if (!Number.isInteger(rawValue)) {
+      throw new Error(`Argument --rawvalue is not an integer`);
+    }
+
+    const decimalValue = (rawValue / 10000).toFixed(3);
+    
+    console.log(`\n🔢 IVS Value Conversion`);
+    console.log(`═══════════════════════════════════════`);
+    console.log(`📊 Raw Value: ${rawValue}`);
+    console.log(`💯 Decimal Value: ${decimalValue}`);
+    console.log(`═══════════════════════════════════════`);
+    
+    // Interpretation
+    const decimalNum = parseFloat(decimalValue);
+    if (decimalNum >= 0.5) {
+      console.log(`📈 Risk Level: HIGH (Direct infection or high exposure)`);
+    } else if (decimalNum >= 0.25) {
+      console.log(`📊 Risk Level: MEDIUM (Direct contact with infected)`);
+    } else if (decimalNum >= 0.125) {
+      console.log(`📉 Risk Level: LOW (Second-level contact)`);
+    } else {
+      console.log(`✅ Risk Level: MINIMAL (Low or no exposure)`);
     }
   });

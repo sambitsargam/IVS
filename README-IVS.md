@@ -92,7 +92,7 @@ Expected IVS (Dmax=2, weight=1/2^(depth+1)):
 ## Live Deployment
 
 ### Sepolia Testnet
-- **Contract Address**: `0x125c8834a1728f4170e1DD7073806e376EeC1030`
+- **Contract Address**: `0x2EfBcd13eBd66eEEb745e7eA52D3128a8Eb481ba`
 - **Network**: Sepolia Testnet
 - **Verification**: ✅ Etherscan Verified
 - **Status**: Live and operational with verified algorithm accuracy
