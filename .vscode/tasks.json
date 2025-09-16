@@ -1,0 +1,14 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Deploy IVS Contract",
+			"type": "shell",
+			"command": "npx hardhat run deploy/deploy-ivs.ts --network localhost",
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		}
+	]
+}

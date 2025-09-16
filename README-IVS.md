@@ -82,12 +82,37 @@ Health Status:
   - Users 2,3,4,5: 0 (healthy)
 
 Expected IVS (Dmax=2, weight=1/2^(depth+1)):
-  - User 1: 0.5
-  - User 2: 0.25
-  - User 3: 0.25
-  - User 4: 0.125
-  - User 5: 0.125
+  - User 1: 0.5    (✅ Verified: 5000 raw → 0.500)
+  - User 2: 0.25   (✅ Verified: 2500 raw → 0.250)
+  - User 3: 0.25   (✅ Verified: 2500 raw → 0.250)
+  - User 4: 0.125  (✅ Verified: 1250 raw → 0.125)
+  - User 5: 0.125  (✅ Verified: 1250 raw → 0.125)
 ```
+
+## Live Deployment
+
+### Sepolia Testnet
+- **Contract Address**: `0x125c8834a1728f4170e1DD7073806e376EeC1030`
+- **Network**: Sepolia Testnet
+- **Verification**: ✅ Etherscan Verified
+- **Status**: Live and operational with verified algorithm accuracy
+
+### Testing Commands
+```bash
+# Setup test scenario
+npx hardhat task:ivs-setup-test --network sepolia
+
+# Compute IVS scores
+npx hardhat task:ivs-compute --dmax 2 --network sepolia
+
+# Decrypt IVS scores
+npx hardhat task:ivs-decrypt --userid 1 --network sepolia
+
+# Decrypt health status
+npx hardhat task:ivs-decrypt-health --userid 1 --network sepolia
+
+# Listen for events
+npx hardhat task:ivs-listen-decrypt --network sepolia
 
 ## Development Setup
 
@@ -145,13 +170,21 @@ Note: Full encryption/decryption testing requires proper FHEVM SDK integration.
 - Visited tracking prevents double-counting
 - Weight calculation ensures proper distance-based scoring
 
-## TODO Items
+## Completed Features ✅
 
-1. **Fixed-Point Arithmetic**: Implement precise fractional weight calculation
-2. **SDK Integration**: Add client-side encryption helpers
-3. **Gas Optimization**: Optimize for large contact networks
-4. **Batch Operations**: Support batch user registration and contact addition
-5. **Event Indexing**: Add comprehensive event logging for off-chain tracking
+1. **✅ Fixed-Point Arithmetic**: Implemented precise fractional weight calculation with verified accuracy
+2. **✅ Privacy-Preserving Decryption**: Health status and IVS score decryption with event-based results
+3. **✅ Event Indexing**: Comprehensive event logging with data type differentiation
+4. **✅ Algorithm Verification**: Live on-chain testing confirms mathematical accuracy
+5. **✅ Enhanced Scaling**: Raw values properly converted to meaningful decimal representations
+
+## Future Enhancements
+
+1. **SDK Integration**: Add client-side encryption helpers for easier frontend integration
+2. **Gas Optimization**: Optimize for large contact networks (1000+ users)
+3. **Batch Operations**: Support batch user registration and contact addition
+4. **Mobile Integration**: React Native SDK for mobile health applications
+5. **Analytics Dashboard**: Web interface for network visualization and statistics
 
 ## References
 
