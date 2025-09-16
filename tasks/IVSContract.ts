@@ -5,7 +5,7 @@ import type { TaskArguments } from "hardhat/types";
  * IVS Contract On-Chain Testing Tasks
  * ==================================
  * 
- * Contract Address: 0x4A57f36051ab7Cb0C556c51c9573F4EE2E6c6680
+ * Contract Address: 0x6A4ADcf7fb926e4Ae9Bf8aCc943Ac0F204648d53
  * Network: Sepolia
  * 
  * Usage Examples:
@@ -20,7 +20,7 @@ import type { TaskArguments } from "hardhat/types";
  */
 
 // Contract address (update after deployment)
-const IVS_CONTRACT_ADDRESS = "0xf92D670b1d0f929524Cf51d510781d88F1920733";
+const IVS_CONTRACT_ADDRESS = "0x6A4ADcf7fb926e4Ae9Bf8aCc943Ac0F204648d53";
 
 /**
  * Register a new user in the IVS system

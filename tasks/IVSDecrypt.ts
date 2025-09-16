@@ -3,7 +3,7 @@ import type { TaskArguments } from "hardhat/types";
 import { FhevmType } from "@fhevm/hardhat-plugin";
 
 // Contract address (update after deployment)
-const IVS_CONTRACT_ADDRESS = "0xf92D670b1d0f929524Cf51d510781d88F1920733";
+const IVS_CONTRACT_ADDRESS = "0x6A4ADcf7fb926e4Ae9Bf8aCc943Ac0F204648d53";
 
 /**
  * Request decryption of IVS score using     } catch (error: unknown) {
